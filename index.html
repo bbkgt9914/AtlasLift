@@ -139,6 +139,7 @@ if (!window.storage) {
 }
 
 
+
 // ---------- iOS design tokens (Atlas red as the app tint) ----------
 const C = {
   bg: "#F2F2F7",
@@ -251,9 +252,9 @@ const emptyForm = {
 function buildWorkOrderHTML(order) {
   const esc = (s) => String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const isRepair = (order.type || "repair") === "repair";
+  const isRepair = (order.type || "repair") !== "maint";
   const title = isRepair ? "Repair Service Order" : "Maintenance Report";
-  const num = order.number || "";
+  const num = orderLabel(order);
 
   const row = (label, val) => val ? `<tr><td class="l">${esc(label)}</td><td class="v">${esc(val)}</td></tr>` : "";
 
@@ -267,30 +268,38 @@ function buildWorkOrderHTML(order) {
   info += row("Serial #", order.serial);
 
   let bodyHTML = "";
-  if (order.specialInstructions) bodyHTML += `<h3>Special Instructions</h3><p>${esc(order.specialInstructions)}</p>`;
-  if (isRepair && order.repairDescription) bodyHTML += `<h3>Repair Description</h3><p>${esc(order.repairDescription)}</p>`;
+  if (order.specialInstructions)
+    bodyHTML += `<h3>Special Instructions</h3><p>${esc(order.specialInstructions)}</p>`;
+  if (isRepair && order.repairDescription)
+    bodyHTML += `<h3>Repair Description</h3><p>${esc(order.repairDescription)}</p>`;
 
-  // Maintenance checklist
-  if (!isRepair && Array.isArray(order.checklist) === false && order.checklistState) {
-    // no-op (kept for safety)
-  }
-  if (!isRepair && order.checklistState) {
-    const secs = Object.keys(order.checklistState);
+  if (!isRepair) {
+    const flags = [];
+    if (order.estimateRequest) flags.push("Written estimate requested");
+    if (order.repairsSchedule) flags.push("Repairs to be scheduled");
+    if (flags.length) bodyHTML += `<h3>Requests</h3><p>${esc(flags.join(" \u00b7 "))}</p>`;
+
+    const checks = order.checks || {};
     let cl = "";
-    for (const sec of secs) {
-      const items = order.checklistState[sec] || {};
-      const rows = Object.keys(items).map((it) =>
-        `<tr><td>${esc(it)}</td><td class="rating">${esc(items[it] || "")}</td></tr>`).join("");
-      if (rows) cl += `<h4>${esc(sec)}</h4><table class="chk">${rows}</table>`;
-    }
+    CHECKLIST.forEach((sec) => {
+      const marked = sec.items.filter((it) => checks[sec.key + "|" + it]);
+      if (!marked.length) return;
+      const rows = sec.items.map((it) => {
+        const v = checks[sec.key + "|" + it] || "";
+        return `<tr><td>${esc(it)}</td><td class="rating">${esc(v)}</td></tr>`;
+      }).join("");
+      cl += `<h4>${esc(sec.title)}</h4><table class="chk">${rows}</table>`;
+    });
     if (cl) bodyHTML += `<h3>Inspection</h3>${cl}`;
-  }
-  if (!isRepair && order.recommendedRepairs) bodyHTML += `<h3>Recommended Repairs</h3><p>${esc(order.recommendedRepairs)}</p>`;
 
-  // Parts (qty + description, no prices)
-  if (Array.isArray(order.parts) && order.parts.some(p => (p.qty || p.description))) {
-    const prows = order.parts.filter(p => p.qty || p.description)
-      .map(p => `<tr><td class="qty">${esc(p.qty || "")}</td><td>${esc(p.description || "")}</td></tr>`).join("");
+    if (order.recommendedRepairs)
+      bodyHTML += `<h3>Recommended Repairs</h3><p>${esc(order.recommendedRepairs)}</p>`;
+  }
+
+  const parts = Array.isArray(order.parts) ? order.parts.filter((p) => p && p.name) : [];
+  if (parts.length) {
+    const prows = parts.map((p) =>
+      `<tr><td class="qty">${esc(p.qty || "")}</td><td>${esc(p.name)}</td></tr>`).join("");
     bodyHTML += `<h3>Parts</h3><table class="parts"><tr><th class="qty">Qty</th><th>Description</th></tr>${prows}</table>`;
   }
 
@@ -317,19 +326,19 @@ function buildWorkOrderHTML(order) {
     table.info td.l { width:150px; color:#666; }
     table.info td.v { font-weight:600; }
     h3 { font-size:14px; margin:18px 0 4px; color:#E3251E; border-bottom:1px solid #eee; padding-bottom:3px; }
-    h4 { font-size:12px; margin:10px 0 2px; color:#333; }
+    h4 { font-size:12px; margin:12px 0 2px; color:#333; }
     p { font-size:13px; line-height:1.45; margin:4px 0; white-space:pre-wrap; }
     table.chk td { border-bottom:1px solid #f0f0f0; }
-    table.chk td.rating { width:60px; font-weight:700; text-align:center; }
+    table.chk td.rating { width:64px; font-weight:700; text-align:center; }
     table.parts th, table.parts td { border-bottom:1px solid #eee; }
     table.parts .qty, td.qty { width:60px; }
     .sigs { display:flex; gap:32px; margin-top:28px; flex-wrap:wrap; }
     .sig img { max-height:70px; border-bottom:1px solid #333; display:block; }
     .sig .cap { font-size:11px; color:#666; margin-top:4px; }
-    @media print { body { padding:0; } }
+    @media print { body { padding:0; } h3, h4 { break-after:avoid; } table { break-inside:auto; } tr { break-inside:avoid; } }
   </style></head><body>
   <div class="head">
-    <div><div class="brand">ATLAS LIFT SALES</div><div class="sub">Forklift Sales &middot; Service &middot; Repairs &middot; Rialto, CA</div></div>
+    <div><div class="brand">ATLAS LIFT LLC</div><div class="sub">Forklift Sales &middot; Service &middot; Repairs &middot; Rialto, CA</div></div>
     <div class="doc"><div class="t">${esc(title)}</div><div class="n">${esc(num)}</div><div class="n">${esc(new Date(order.createdAt || Date.now()).toLocaleDateString())}</div></div>
   </div>
   <table class="info">${info}</table>
@@ -791,7 +800,7 @@ function AtlasServiceOrders() {
             <AppIcon size={60} />
             <div>
               <h1 className="text-3xl font-bold tracking-tight leading-tight" style={{ color: C.label }}>Work Orders</h1>
-              <div className="text-sm" style={{ color: C.secondary }}>Atlas Lift Sales</div>
+              <div className="text-sm" style={{ color: C.secondary }}>Atlas Lift LLC</div>
             </div>
           </div>
 
