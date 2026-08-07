@@ -16,6 +16,27 @@
   html, body { margin:0; padding:0; background:#F2F2F7; }
   * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
   #root { min-height: 100vh; }
+  #boot {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; padding: 28px;
+    font: 15px -apple-system, Helvetica, Arial, sans-serif; color: #444; text-align: center;
+    background: #F2F2F7;
+  }
+  #boot .mark {
+    width: 62px; height: 62px; border-radius: 14px; background: #E3251E; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font: 800 34px -apple-system, Helvetica, Arial, sans-serif;
+  }
+  #bootErr {
+    display: none; max-width: 560px; width: 100%; text-align: left;
+    background: #fff; border: 1px solid #E3251E; border-radius: 12px;
+    padding: 14px; font: 12px ui-monospace, Menlo, monospace; color: #B3120C;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  #retryBtn {
+    display: none; background: #E3251E; color: #fff; border: 0; border-radius: 12px;
+    padding: 12px 22px; font: 600 15px -apple-system, sans-serif;
+  }
   #offlineToast {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
@@ -25,40 +46,66 @@
   }
   #offlineToast.show { opacity: 1; }
 </style>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
 <div id="root"></div>
+
+<div id="boot">
+  <div class="mark">A</div>
+  <div id="bootMsg">Loading Atlas Work Orders&hellip;</div>
+  <div id="bootErr"></div>
+  <button id="retryBtn" onclick="location.reload()">Try Again</button>
+</div>
+
 <div id="offlineToast"></div>
 
 <script>
-// ---------- offline support ----------
+// Show any startup problem on screen instead of a blank page.
+window.__bootFail = function (what, detail) {
+  var b = document.getElementById("bootMsg");
+  var e = document.getElementById("bootErr");
+  var r = document.getElementById("retryBtn");
+  if (b) b.textContent = "Couldn't start the app";
+  if (e) { e.style.display = "block"; e.textContent = what + (detail ? "\n\n" + detail : ""); }
+  if (r) r.style.display = "inline-block";
+};
+window.addEventListener("error", function (ev) {
+  if (document.getElementById("boot")) {
+    window.__bootFail("Script error", (ev.message || "") + "\n" + (ev.filename || "") + ":" + (ev.lineno || ""));
+  }
+});
+</script>
+
+<!-- Libraries: try unpkg, fall back to jsDelivr if it is blocked or unreachable -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script>
+if (!window.React) document.write('<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"><\/script>');
+</script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script>
+if (!window.ReactDOM) document.write('<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"><\/script>');
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script>
+if (!window.Babel) document.write('<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"><\/script>');
+</script>
+
+<script>
+// Verify everything actually arrived before we try to render.
 (function () {
-  function toast(msg, ms) {
-    var t = document.getElementById("offlineToast");
-    if (!t) return;
-    t.textContent = msg; t.classList.add("show");
-    setTimeout(function () { t.classList.remove("show"); }, ms || 3000);
+  var missing = [];
+  if (!window.React) missing.push("React");
+  if (!window.ReactDOM) missing.push("ReactDOM");
+  if (!window.Babel) missing.push("Babel (JSX compiler)");
+  if (!window.tailwind) missing.push("Tailwind CSS");
+  if (missing.length) {
+    window.__bootFail(
+      "These couldn't load: " + missing.join(", "),
+      "Usually this means no internet on first load, or a content blocker. " +
+      "If you use Brave, tap the lion icon and turn Shields OFF for this site, then reload."
+    );
   }
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./sw.js").catch(function (e) {
-        console.log("SW registration failed", e);
-      });
-      navigator.serviceWorker.addEventListener("message", function (ev) {
-        if (ev.data && ev.data.type === "precache") {
-          if (ev.data.cached >= ev.data.total) {
-            toast("Saved for offline use ✓", 3500);
-          } else {
-            toast("Partly saved offline (" + ev.data.cached + "/" + ev.data.total + ")", 4000);
-          }
-        }
-      });
-    });
-  }
-  window.addEventListener("offline", function () { toast("Offline — app still works", 2500); });
 })();
 </script>
 
@@ -66,7 +113,6 @@
 const { useState, useEffect, useRef } = React;
 
 
-// ---------- Inline icon components (replacing lucide-react) ----------
 const _icon = (paths) => (p) => {
   const { size = 24, color = "currentColor", strokeWidth = 2, style, ...rest } = p || {};
   return React.createElement("svg", {
@@ -88,7 +134,7 @@ const Copy = _icon(["M20 9H10a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V10
 const Check = _icon(["M20 6 9 17l-5-5"]);
 
 
-// ---------- storage shim: localStorage so work orders persist ----------
+// ---------- storage: localStorage keeps work orders on this device ----------
 if (!window.storage) {
   window.storage = {
     get: async (key) => {
@@ -1191,8 +1237,39 @@ function AtlasServiceOrders() {
 }
 
 
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(React.createElement(AtlasServiceOrders));
+try {
+  const root = ReactDOM.createRoot(document.getElementById("root"));
+  root.render(React.createElement(AtlasServiceOrders));
+  const boot = document.getElementById("boot");
+  if (boot) boot.remove();
+} catch (err) {
+  window.__bootFail("The app failed to start", (err && err.message) || String(err));
+}
+</script>
+
+<script>
+// ---------- offline caching ----------
+(function () {
+  function toast(msg, ms) {
+    var t = document.getElementById("offlineToast");
+    if (!t) return;
+    t.textContent = msg; t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, ms || 3000);
+  }
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js").catch(function (e) { console.log("SW failed", e); });
+      navigator.serviceWorker.addEventListener("message", function (ev) {
+        if (ev.data && ev.data.type === "precache") {
+          toast(ev.data.cached >= ev.data.total
+            ? "Saved for offline use ✓"
+            : "Partly saved offline (" + ev.data.cached + "/" + ev.data.total + ")", 3500);
+        }
+      });
+    });
+  }
+  window.addEventListener("offline", function () { toast("Offline — app still works", 2500); });
+})();
 </script>
 </body>
 </html>
