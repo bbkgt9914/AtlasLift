@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Atlas WO" />
+<meta name="theme-color" content="#E3251E" />
+<link rel="apple-touch-icon" href="./icon-180.png" />
+<link rel="icon" href="./icon-180.png" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<title>Atlas Work Orders</title>
+<style>
+  html, body { margin:0; padding:0; background:#F2F2F7; }
+  * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+  #root { min-height: 100vh; }
+  #offlineToast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+    background: rgba(28,28,30,.94); color: #fff; font: 600 13px -apple-system, sans-serif;
+    padding: 10px 16px; border-radius: 999px; z-index: 9999; opacity: 0;
+    transition: opacity .3s; pointer-events: none; max-width: 88%; text-align: center;
+  }
+  #offlineToast.show { opacity: 1; }
+</style>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<div id="offlineToast"></div>
+
+<script>
+// ---------- offline support ----------
+(function () {
+  function toast(msg, ms) {
+    var t = document.getElementById("offlineToast");
+    if (!t) return;
+    t.textContent = msg; t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, ms || 3000);
+  }
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js").catch(function (e) {
+        console.log("SW registration failed", e);
+      });
+      navigator.serviceWorker.addEventListener("message", function (ev) {
+        if (ev.data && ev.data.type === "precache") {
+          if (ev.data.cached >= ev.data.total) {
+            toast("Saved for offline use ✓", 3500);
+          } else {
+            toast("Partly saved offline (" + ev.data.cached + "/" + ev.data.total + ")", 4000);
+          }
+        }
+      });
+    });
+  }
+  window.addEventListener("offline", function () { toast("Offline — app still works", 2500); });
+})();
+</script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+
+// ---------- Inline icon components (replacing lucide-react) ----------
+const _icon = (paths) => (p) => {
+  const { size = 24, color = "currentColor", strokeWidth = 2, style, ...rest } = p || {};
+  return React.createElement("svg", {
+    xmlns: "http://www.w3.org/2000/svg", width: size, height: size,
+    viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth,
+    strokeLinecap: "round", strokeLinejoin: "round", style, ...rest
+  }, paths.map((d, i) => React.createElement("path", { key: i, d })));
+};
+const Wrench = _icon(["M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"]);
+const ClipboardList = _icon(["M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2","M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z","M12 11h4","M12 16h4","M8 11h.01","M8 16h.01"]);
+const ChevronRight = _icon(["m9 18 6-6-6-6"]);
+const ChevronLeft = _icon(["m15 18-6-6 6-6"]);
+const Plus = _icon(["M5 12h14","M12 5v14"]);
+const Trash2 = _icon(["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2","M10 11v6","M14 11v6"]);
+const PenLine = _icon(["M12 20h9","M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"]);
+const CheckCircle2 = _icon(["M22 11.08V12a10 10 0 1 1-5.93-9.14","m9 11 3 3L22 4"]);
+const AlertTriangle = _icon(["m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z","M12 9v4","M12 17h.01"]);
+const Copy = _icon(["M20 9H10a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1z","M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"]);
+const Check = _icon(["M20 6 9 17l-5-5"]);
+
+
+// ---------- storage shim: localStorage so work orders persist ----------
+if (!window.storage) {
+  window.storage = {
+    get: async (key) => {
+      try { const v = localStorage.getItem(key); return v == null ? null : JSON.parse(v); }
+      catch (e) { return null; }
+    },
+    set: async (key, value) => {
+      try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+      catch (e) { throw new Error("localStorage set failed: " + e.message); }
+    },
+  };
+}
+
+
+// ---------- iOS design tokens (Atlas red as the app tint) ----------
+const C = {
+  bg: "#F2F2F7",
+  card: "#FFFFFF",
+  sep: "#E5E5EA",
+  label: "#000000",
+  secondary: "#8A8A8E",
+  tertiary: "#C7C7CC",
+  tint: "#E3251E",
+  grayFill: "#EFEFF4",
+  green: "#34C759",
+  orange: "#FF9500",
+  destructive: "#FF3B30",
+  qbGreen: "#2CA01C",
+};
+
+const fontStyles = `
+.ios { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; }
+.ios input, .ios textarea { font-family: inherit; }
+.ios input:focus, .ios textarea:focus { outline: none; border-color: #E3251E !important; }
+`;
+
+// ---------- Maintenance checklist (from the Atlas paper form) ----------
+const CHECKLIST = [
+  {
+    key: "visual",
+    title: "Visual Inspection",
+    items: [
+      "Fluid leaks", "Tires", "Tilt cyl. leakage", "Lift cyl. leakage", "Carriage",
+      "Forks / locks", "Lift chains", "Improper modifications", "Clean off truck",
+      "Air clean radiator", "Operational inspection", "Engine performance",
+      "Braking system", "Parking brake", "Horns / lights", "Safety equipment",
+      "Inching control", "Unusual noises",
+    ],
+  },
+  {
+    key: "service",
+    title: "Service Check Points",
+    items: [
+      "Change engine oil & filter", "Radiator level & hose", "Belt condition & tension",
+      "Chk battery level & clean con.", "Hyd. system oil level", "Drive train oil level",
+      "Brake system oil level", "Hyd. hose condition", "Lube all service points",
+      "Mast components", "Steering linkage / axle", "Attachments", "All pedal linkage",
+      "Hyd. control linkage", "Chain adjustment", "Fork wear", "Operator restraint",
+      "Overhead guard", "Load backrest",
+    ],
+  },
+  {
+    key: "motors",
+    title: "Motors",
+    items: [
+      "Drive motor condition", "Pump motor condition", "Steer motor condition",
+      "Aux. motor condition", "Brushes condition", "Electrical test", "Cable condition",
+      "Contactor assemblies", "Plugging operation", "Hand brake switch operation",
+      "Service brake switch operation", "Load wheel bearing", "Emergency reverse",
+      "Pallet entry roller",
+    ],
+  },
+];
+const RATINGS = ["OK", "NW", "CA"];
+const ratingColor = { OK: C.green, NW: C.orange, CA: C.destructive };
+
+// ---------- Storage: best-effort only, never blocks the UI ----------
+const DATA_KEY = "atlasdata_v1";
+
+async function tryStorageSet(key, value) {
+  if (!window.storage) return false;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const r = attempt % 2 === 0
+        ? await window.storage.set(key, value, false)
+        : await window.storage.set(key, value);
+      if (r) return true;
+    } catch {}
+    await new Promise((res) => setTimeout(res, 300 * (attempt + 1)));
+  }
+  return false;
+}
+async function tryStorageGet(key) {
+  if (!window.storage) return null;
+  let r = null;
+  try { r = await window.storage.get(key, false); }
+  catch { try { r = await window.storage.get(key); } catch {} }
+  return r && r.value ? r.value : null;
+}
+
+function nextNumber(orders, type) {
+  return orders.filter((o) => o.type === type).reduce((m, o) => Math.max(m, o.number || 0), 0) + 1;
+}
+function orderLabel(o) {
+  return (o.type === "maint" ? "MR-" : "WO-") + String(o.number).padStart(4, "0") + (o.type === "maint" ? "M" : "R");
+}
+function fmtDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+function sortOrders(orders) {
+  return [...orders].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+}
+
+const emptyForm = {
+  customer: "", address: "", phone: "", po: "", unit: "",
+  make: "", model: "", serial: "", hourMeter: "", tech: "",
+  specialInstructions: "", repairDescription: "",
+  estimateRequest: false, repairsSchedule: false, checks: {}, recommendedRepairs: "",
+  parts: [],
+};
+
+// ---------- Save as PDF (print to PDF via browser) ----------
+function buildWorkOrderHTML(order) {
+  const esc = (s) => String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const isRepair = (order.type || "repair") === "repair";
+  const title = isRepair ? "Repair Service Order" : "Maintenance Report";
+  const num = order.number || "";
+
+  const row = (label, val) => val ? `<tr><td class="l">${esc(label)}</td><td class="v">${esc(val)}</td></tr>` : "";
+
+  let info = "";
+  info += row("Customer", order.customer);
+  info += row("Address", order.address);
+  info += row("Phone", order.phone);
+  info += row("Unit #", order.unit);
+  info += row("Hour meter", order.hourMeter);
+  info += row("Make / Model", order.makeModel);
+  info += row("Serial #", order.serial);
+
+  let bodyHTML = "";
+  if (order.specialInstructions) bodyHTML += `<h3>Special Instructions</h3><p>${esc(order.specialInstructions)}</p>`;
+  if (isRepair && order.repairDescription) bodyHTML += `<h3>Repair Description</h3><p>${esc(order.repairDescription)}</p>`;
+
+  // Maintenance checklist
+  if (!isRepair && Array.isArray(order.checklist) === false && order.checklistState) {
+    // no-op (kept for safety)
+  }
+  if (!isRepair && order.checklistState) {
+    const secs = Object.keys(order.checklistState);
+    let cl = "";
+    for (const sec of secs) {
+      const items = order.checklistState[sec] || {};
+      const rows = Object.keys(items).map((it) =>
+        `<tr><td>${esc(it)}</td><td class="rating">${esc(items[it] || "")}</td></tr>`).join("");
+      if (rows) cl += `<h4>${esc(sec)}</h4><table class="chk">${rows}</table>`;
+    }
+    if (cl) bodyHTML += `<h3>Inspection</h3>${cl}`;
+  }
+  if (!isRepair && order.recommendedRepairs) bodyHTML += `<h3>Recommended Repairs</h3><p>${esc(order.recommendedRepairs)}</p>`;
+
+  // Parts (qty + description, no prices)
+  if (Array.isArray(order.parts) && order.parts.some(p => (p.qty || p.description))) {
+    const prows = order.parts.filter(p => p.qty || p.description)
+      .map(p => `<tr><td class="qty">${esc(p.qty || "")}</td><td>${esc(p.description || "")}</td></tr>`).join("");
+    bodyHTML += `<h3>Parts</h3><table class="parts"><tr><th class="qty">Qty</th><th>Description</th></tr>${prows}</table>`;
+  }
+
+  let sign = "";
+  if (order.technicianSignature)
+    sign += `<div class="sig"><img src="${order.technicianSignature}" /><div class="cap">Service Technician</div></div>`;
+  if (order.signature)
+    sign += `<div class="sig"><img src="${order.signature}" /><div class="cap">${esc(order.signerName || "")}${order.signerName ? " &middot; " : ""}Customer${order.signedAt ? " &middot; " + esc(new Date(order.signedAt).toLocaleDateString()) : ""}</div></div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>${esc(num)} ${esc(title)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, Helvetica, Arial, sans-serif; color:#111; margin:0; padding:24px; }
+    .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #E3251E; padding-bottom:12px; margin-bottom:16px; }
+    .brand { font-size:22px; font-weight:800; color:#E3251E; letter-spacing:.5px; }
+    .sub { font-size:12px; color:#555; margin-top:2px; }
+    .doc { text-align:right; }
+    .doc .t { font-size:15px; font-weight:700; }
+    .doc .n { font-size:13px; color:#555; }
+    table { width:100%; border-collapse:collapse; margin:6px 0 12px; }
+    td, th { text-align:left; vertical-align:top; padding:5px 6px; font-size:13px; }
+    table.info td.l { width:150px; color:#666; }
+    table.info td.v { font-weight:600; }
+    h3 { font-size:14px; margin:18px 0 4px; color:#E3251E; border-bottom:1px solid #eee; padding-bottom:3px; }
+    h4 { font-size:12px; margin:10px 0 2px; color:#333; }
+    p { font-size:13px; line-height:1.45; margin:4px 0; white-space:pre-wrap; }
+    table.chk td { border-bottom:1px solid #f0f0f0; }
+    table.chk td.rating { width:60px; font-weight:700; text-align:center; }
+    table.parts th, table.parts td { border-bottom:1px solid #eee; }
+    table.parts .qty, td.qty { width:60px; }
+    .sigs { display:flex; gap:32px; margin-top:28px; flex-wrap:wrap; }
+    .sig img { max-height:70px; border-bottom:1px solid #333; display:block; }
+    .sig .cap { font-size:11px; color:#666; margin-top:4px; }
+    @media print { body { padding:0; } }
+  </style></head><body>
+  <div class="head">
+    <div><div class="brand">ATLAS LIFT SALES</div><div class="sub">Forklift Sales &middot; Service &middot; Repairs &middot; Rialto, CA</div></div>
+    <div class="doc"><div class="t">${esc(title)}</div><div class="n">${esc(num)}</div><div class="n">${esc(new Date(order.createdAt || Date.now()).toLocaleDateString())}</div></div>
+  </div>
+  <table class="info">${info}</table>
+  ${bodyHTML}
+  <div class="sigs">${sign}</div>
+  </body></html>`;
+}
+
+function saveOrderAsPDF(order) {
+  const html = buildWorkOrderHTML(order);
+  const w = window.open("", "_blank");
+  if (!w) {
+    // Popup blocked: write into a hidden iframe and print that.
+    const frame = document.createElement("iframe");
+    frame.style.position = "fixed"; frame.style.right = "0"; frame.style.bottom = "0";
+    frame.style.width = "0"; frame.style.height = "0"; frame.style.border = "0";
+    document.body.appendChild(frame);
+    const doc = frame.contentWindow.document;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { frame.contentWindow.focus(); frame.contentWindow.print(); }, 400);
+    return;
+  }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(() => { w.focus(); w.print(); }, 500);
+}
+
+
+// ---------- Signature pad (compact JPEG) ----------
+function SignaturePad({ onChange, height = 150 }) {
+  const canvasRef = useRef(null);
+  const drawing = useRef(false);
+  const hasInk = useRef(false);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const fillWhite = (canvas) => {
+    const ctx = canvas.getContext("2d");
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    fillWhite(canvas);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1a1a5e";
+
+    const pos = (e) => {
+      const r = canvas.getBoundingClientRect();
+      const p = (e.touches && e.touches.length ? e.touches[0] : e);
+      return { x: p.clientX - r.left, y: p.clientY - r.top };
+    };
+    const start = (e) => {
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      drawing.current = true;
+      const c = canvas.getContext("2d");
+      const { x, y } = pos(e);
+      c.beginPath();
+      c.moveTo(x, y);
+    };
+    const move = (e) => {
+      if (!drawing.current) return;
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      const c = canvas.getContext("2d");
+      const { x, y } = pos(e);
+      c.lineTo(x, y);
+      c.stroke();
+      hasInk.current = true;
+    };
+    const end = (e) => {
+      if (!drawing.current) return;
+      if (e.cancelable) e.preventDefault();
+      drawing.current = false;
+      if (hasInk.current) onChangeRef.current(canvas.toDataURL("image/jpeg", 0.5));
+    };
+
+    // Native non-passive listeners: React's synthetic touch events are passive,
+    // so preventDefault() there can't stop iOS from scrolling the page on a
+    // downward stroke. These can.
+    canvas.addEventListener("touchstart", start, { passive: false });
+    canvas.addEventListener("touchmove", move, { passive: false });
+    canvas.addEventListener("touchend", end, { passive: false });
+    canvas.addEventListener("touchcancel", end, { passive: false });
+    canvas.addEventListener("mousedown", start);
+    canvas.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", end);
+    return () => {
+      canvas.removeEventListener("touchstart", start);
+      canvas.removeEventListener("touchmove", move);
+      canvas.removeEventListener("touchend", end);
+      canvas.removeEventListener("touchcancel", end);
+      canvas.removeEventListener("mousedown", start);
+      canvas.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", end);
+    };
+  }, []);
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    fillWhite(canvas);
+    hasInk.current = false;
+    onChange(null);
+  };
+
+  return (
+    <div>
+      <div className="relative overflow-hidden"
+           style={{ background: "#FFF", borderRadius: "12px", border: `1px solid ${C.sep}`, touchAction: "none", overscrollBehavior: "none" }}>
+        <canvas
+          ref={canvasRef} className="w-full block"
+          style={{ height: height + "px", touchAction: "none", WebkitUserSelect: "none", userSelect: "none" }}
+        />
+        <div className="absolute left-5 right-5 pointer-events-none"
+             style={{ bottom: "26px", borderBottom: `1px dashed ${C.tertiary}` }} />
+        <span className="absolute pointer-events-none text-xs"
+              style={{ bottom: "8px", left: "20px", color: C.tertiary }}>
+          Sign above the line
+        </span>
+      </div>
+      <button onClick={clear} className="mt-2 text-sm font-medium" style={{ color: C.tint }}>
+        Clear
+      </button>
+    </div>
+  );
+}
+
+// ---------- UI pieces ----------
+function SectionHeader({ children }) {
+  return (
+    <div className="px-1 pb-2 pt-6 text-xs font-semibold uppercase" style={{ color: C.secondary, letterSpacing: "0.05em" }}>
+      {children}
+    </div>
+  );
+}
+function FieldLabel({ children }) {
+  return (
+    <label className="block text-xs font-medium mb-1 px-1" style={{ color: C.secondary }}>
+      {children}
+    </label>
+  );
+}
+function TextInput(props) {
+  return (
+    <input {...props}
+           className="w-full text-base px-3.5 py-2.5"
+           style={{ background: C.card, borderRadius: "10px", border: `1px solid ${C.sep}`, color: C.label }} />
+  );
+}
+function TextArea(props) {
+  return (
+    <textarea {...props}
+              className="w-full text-base px-3.5 py-2.5"
+              style={{ background: C.card, borderRadius: "10px", border: `1px solid ${C.sep}`, color: C.label, resize: "vertical" }} />
+  );
+}
+function IOSSwitch({ value, onChange }) {
+  return (
+    <button onClick={() => onChange(!value)}
+            className="relative shrink-0 transition-colors"
+            style={{ width: "51px", height: "31px", borderRadius: "16px", background: value ? C.green : "#E9E9EA" }}>
+      <span className="absolute transition-all"
+            style={{
+              top: "2px", left: value ? "22px" : "2px",
+              width: "27px", height: "27px", borderRadius: "50%", background: "#FFF",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+            }} />
+    </button>
+  );
+}
+function BigButton({ children, onClick, color = C.tint, disabled }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+            className="w-full text-center text-base font-semibold py-3.5 active:opacity-70"
+            style={{ background: disabled ? C.tertiary : color, color: "#FFF", borderRadius: "14px" }}>
+      {children}
+    </button>
+  );
+}
+function GrayButton({ children, onClick }) {
+  return (
+    <button onClick={onClick}
+            className="w-full text-center text-base font-semibold py-3.5 active:opacity-70"
+            style={{ background: "#E3E3E8", color: C.tint, borderRadius: "14px" }}>
+      {children}
+    </button>
+  );
+}
+function StatusPill({ status }) {
+  const signed = status === "signed";
+  return (
+    <span className="text-xs font-semibold px-2 py-0.5"
+          style={{
+            borderRadius: "20px",
+            color: signed ? "#FFF" : C.secondary,
+            background: signed ? C.green : "#E3E3E8",
+          }}>
+      {signed ? "Signed" : "Draft"}
+    </span>
+  );
+}
+function AppIcon({ size = 60 }) {
+  return (
+    <div className="flex flex-col items-center justify-center shrink-0"
+         style={{
+           width: size + "px", height: size + "px", borderRadius: size * 0.23 + "px",
+           background: "linear-gradient(180deg, #F5453D 0%, #C41E17 100%)",
+           boxShadow: "0 4px 10px rgba(196,30,23,0.35)",
+         }}>
+      <span className="leading-none" style={{ color: "#FFF", fontSize: size * 0.42 + "px" }}>▲</span>
+      <span className="font-bold leading-none" style={{ color: "#FFF", fontSize: size * 0.16 + "px", letterSpacing: "0.12em", marginTop: size * 0.05 + "px" }}>
+        ATLAS
+      </span>
+    </div>
+  );
+}
+
+// ---------- Main app ----------
+function AtlasServiceOrders() {
+  const [view, setView] = useState("list");
+  const [filter, setFilter] = useState("all");
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState(emptyForm);
+  const [formType, setFormType] = useState("repair");
+  const [editingId, setEditingId] = useState(null);
+  const [currentId, setCurrentId] = useState(null);
+  const [openSection, setOpenSection] = useState("visual");
+  const [custSig, setCustSig] = useState(null);
+  const [techSig, setTechSig] = useState(null);
+  const [signerName, setSignerName] = useState("");
+  const [error, setError] = useState("");
+  const [qb, setQb] = useState({ state: "idle", msg: "" });
+  const [storageOk, setStorageOk] = useState(true);
+  const [importText, setImportText] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const current = orders.find((o) => o.id === currentId) || null;
+
+  useEffect(() => {
+    (async () => {
+      const raw = await tryStorageGet(DATA_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.orders)) setOrders(sortOrders(parsed.orders));
+        } catch {}
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  // Save to state immediately; try storage in the background (never blocks).
+  const commit = (nextOrders) => {
+    const sorted = sortOrders(nextOrders);
+    setOrders(sorted);
+    tryStorageSet(DATA_KEY, JSON.stringify({ orders: sorted })).then((ok) => {
+      setStorageOk(ok);
+    });
+    return sorted;
+  };
+
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const setCheckTo = (section, item, val) => {
+    const key = section + "|" + item;
+    const checks = { ...form.checks };
+    if (checks[key] === val) delete checks[key]; else checks[key] = val;
+    setForm({ ...form, checks });
+  };
+  const markSectionOK = (sec) => {
+    const checks = { ...form.checks };
+    sec.items.forEach((it) => { const k = sec.key + "|" + it; if (!checks[k]) checks[k] = "OK"; });
+    setForm({ ...form, checks });
+  };
+  const addPart = () => setForm({ ...form, parts: [...form.parts, { qty: "", name: "" }] });
+  const setPart = (i, k, v) =>
+    setForm({ ...form, parts: form.parts.map((p, j) => (j === i ? { ...p, [k]: v } : p)) });
+  const removePart = (i) => setForm({ ...form, parts: form.parts.filter((_, j) => j !== i) });
+
+  const startNew = (type) => {
+    setForm(emptyForm); setFormType(type); setEditingId(null);
+    setError(""); setOpenSection("visual"); setView("form");
+  };
+  const openOrder = (id) => {
+    setCurrentId(id); setQb({ state: "idle", msg: "" }); setView("detail");
+  };
+
+  const save = (goSign) => {
+    if (!form.customer.trim()) { setError("Company name is required."); return; }
+    setError("");
+    let order, nextOrders;
+    if (editingId) {
+      const existing = orders.find((o) => o.id === editingId);
+      order = { ...existing, ...form };
+      nextOrders = orders.map((o) => (o.id === editingId ? order : o));
+    } else {
+      order = {
+        id: String(Date.now()), type: formType, number: nextNumber(orders, formType),
+        createdAt: new Date().toISOString(), status: "draft", ...form,
+      };
+      nextOrders = [order, ...orders];
+    }
+    commit(nextOrders);
+    setCurrentId(order.id);
+    if (goSign) { setCustSig(null); setTechSig(null); setSignerName(""); setView("sign"); }
+    else setView("list");
+  };
+
+  const completeSigning = () => {
+    if (!custSig) { setError("A customer signature is required."); return; }
+    setError("");
+    const order = {
+      ...current, status: "signed",
+      signature: custSig, technicianSignature: techSig,
+      signerName: signerName.trim(), signedAt: new Date().toISOString(),
+    };
+    commit(orders.map((o) => (o.id === order.id ? order : o)));
+    setQb({ state: "idle", msg: "" });
+    setView("detail");
+  };
+
+  const editDraft = () => {
+    const f = { ...emptyForm };
+    Object.keys(emptyForm).forEach((k) => { if (current[k] !== undefined) f[k] = current[k]; });
+    setForm(f);
+    setFormType(current.type || "repair");
+    setEditingId(current.id);
+    setError("");
+    setView("form");
+  };
+
+  const removeOrder = () => {
+    commit(orders.filter((o) => o.id !== current.id));
+    setCurrentId(null);
+    setView("list");
+  };
+
+  const savePDF = () => {
+    try { saveOrderAsPDF(current); }
+    catch (e) { setQb({ state: "error", msg: "Couldn't open the PDF view. Try again." }); }
+  };
+
+  const copyBackup = async () => {
+    const text = JSON.stringify({ orders }, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setImportText(text); // fall back to showing it so they can select-all copy
+    }
+  };
+  const restoreBackup = () => {
+    try {
+      const parsed = JSON.parse(importText);
+      if (Array.isArray(parsed.orders)) {
+        commit(parsed.orders);
+        setImportText("");
+        setView("list");
+      } else {
+        setError("That backup didn't contain any work orders.");
+      }
+    } catch {
+      setError("Couldn't read that backup text. Paste the full backup and try again.");
+    }
+  };
+
+  const NavBar = ({ title, back }) => (
+    <div className="sticky top-0 z-10"
+         style={{ background: "rgba(242,242,247,0.92)", backdropFilter: "blur(12px)", borderBottom: `0.5px solid ${C.sep}` }}>
+      <div className="max-w-2xl mx-auto px-2 h-11 flex items-center relative">
+        {back && (
+          <button onClick={back} className="flex items-center text-base active:opacity-50" style={{ color: C.tint }}>
+            <ChevronLeft size={24} strokeWidth={2.5} />
+            <span className="-ml-0.5">Back</span>
+          </button>
+        )}
+        <span className="absolute left-1/2 -translate-x-1/2 text-base font-semibold truncate max-w-[55%]" style={{ color: C.label }}>
+          {title}
+        </span>
+      </div>
+    </div>
+  );
+
+  const StorageBanner = () => storageOk ? null : (
+    <button onClick={() => { setError(""); setImportText(""); setView("backup"); }}
+            className="w-full flex items-center gap-2 px-3 py-2 mb-1 text-left active:opacity-70"
+            style={{ background: "#FFF3E0", borderRadius: "10px" }}>
+      <AlertTriangle size={18} color={C.orange} className="shrink-0" />
+      <span className="text-xs" style={{ color: "#8A5A00" }}>
+        Saved on this device, but auto-save is unavailable. Tap to back up your work orders.
+      </span>
+    </button>
+  );
+
+  if (loading) {
+    return (
+      <div className="ios min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+        <style>{fontStyles}</style>
+        <div className="text-sm" style={{ color: C.secondary }}>Loading…</div>
+      </div>
+    );
+  }
+
+  const isMaint = formType === "maint";
+
+  // ---------- BACKUP / RESTORE ----------
+  if (view === "backup") {
+    return (
+      <div className="ios min-h-screen pb-12" style={{ background: C.bg }}>
+        <style>{fontStyles}</style>
+        <NavBar title="Backup & Restore" back={() => setView("list")} />
+        <div className="max-w-2xl mx-auto px-4">
+          <p className="text-sm px-1 pt-5" style={{ color: C.secondary }}>
+            Your {orders.length} work order{orders.length === 1 ? "" : "s"} are saved on this device. To keep a copy you can restore anytime, copy the backup below and paste it somewhere safe (Notes, email to yourself, etc.).
+          </p>
+
+          <SectionHeader>Backup</SectionHeader>
+          <BigButton onClick={copyBackup} color={copied ? C.green : C.tint}>
+            <span className="inline-flex items-center gap-1.5">
+              {copied ? <><Check size={18} /> Copied</> : <><Copy size={18} /> Copy Backup</>}
+            </span>
+          </BigButton>
+
+          <SectionHeader>Restore</SectionHeader>
+          <TextArea rows={6} value={importText} onChange={(e) => setImportText(e.target.value)}
+                    placeholder="Paste a backup here to restore your work orders…" />
+          {error && (
+            <div className="text-sm font-medium text-center mt-3" style={{ color: C.destructive }}>{error}</div>
+          )}
+          <div className="mt-3">
+            <GrayButton onClick={restoreBackup}>Restore From Backup</GrayButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- LIST ----------
+  if (view === "list") {
+    const shown = orders.filter((o) => filter === "all" || o.type === filter);
+    return (
+      <div className="ios min-h-screen pb-10" style={{ background: C.bg }}>
+        <style>{fontStyles}</style>
+        <div className="max-w-2xl mx-auto px-4 pt-8">
+          <div className="flex items-center gap-4">
+            <AppIcon size={60} />
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight leading-tight" style={{ color: C.label }}>Work Orders</h1>
+              <div className="text-sm" style={{ color: C.secondary }}>Atlas Lift Sales</div>
+            </div>
+          </div>
+
+          <div className="mt-5"><StorageBanner /></div>
+
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <button onClick={() => startNew("repair")}
+                    className="flex flex-col items-start gap-2 p-4 active:opacity-70 text-left"
+                    style={{ background: C.card, borderRadius: "16px", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+              <span className="flex items-center justify-center" style={{ width: "36px", height: "36px", borderRadius: "10px", background: C.tint }}>
+                <Wrench size={20} color="#FFF" />
+              </span>
+              <span className="font-semibold text-base leading-tight" style={{ color: C.label }}>New Repair</span>
+              <span className="text-xs -mt-1.5" style={{ color: C.secondary }}>Work order</span>
+            </button>
+            <button onClick={() => startNew("maint")}
+                    className="flex flex-col items-start gap-2 p-4 active:opacity-70 text-left"
+                    style={{ background: C.card, borderRadius: "16px", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+              <span className="flex items-center justify-center" style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#1C1C1E" }}>
+                <ClipboardList size={20} color="#FFF" />
+              </span>
+              <span className="font-semibold text-base leading-tight" style={{ color: C.label }}>New Maintenance</span>
+              <span className="text-xs -mt-1.5" style={{ color: C.secondary }}>Work order</span>
+            </button>
+          </div>
+
+          <div className="flex mt-6 p-0.5" style={{ background: "#E3E3E8", borderRadius: "9px" }}>
+            {[["all", "All"], ["repair", "Repair"], ["maint", "Maintenance"]].map(([k, lbl]) => (
+              <button key={k} onClick={() => setFilter(k)}
+                      className="flex-1 text-sm font-medium py-1.5"
+                      style={{
+                        borderRadius: "7px",
+                        background: filter === k ? "#FFF" : "transparent",
+                        color: C.label,
+                        boxShadow: filter === k ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                      }}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+
+          <SectionHeader>Recent</SectionHeader>
+          {shown.length === 0 ? (
+            <div className="p-8 text-center" style={{ background: C.card, borderRadius: "12px" }}>
+              <div className="font-semibold mb-1" style={{ color: C.label }}>No work orders</div>
+              <div className="text-sm" style={{ color: C.secondary }}>Tap New Repair or New Maintenance to get started.</div>
+            </div>
+          ) : (
+            <div className="overflow-hidden" style={{ background: C.card, borderRadius: "12px" }}>
+              {shown.map((o, i) => (
+                <button key={o.id} onClick={() => openOrder(o.id)}
+                        className="w-full text-left px-4 active:opacity-60"
+                        style={{ borderBottom: i === shown.length - 1 ? "none" : `0.5px solid ${C.sep}` }}>
+                  <div className="flex items-center gap-3 py-3">
+                    <span className="flex items-center justify-center shrink-0"
+                          style={{ width: "34px", height: "34px", borderRadius: "9px", background: o.type === "maint" ? "#1C1C1E" : C.tint }}>
+                      {o.type === "maint" ? <ClipboardList size={18} color="#FFF" /> : <Wrench size={18} color="#FFF" />}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-base truncate" style={{ color: C.label }}>{o.customer}</div>
+                      <div className="text-sm" style={{ color: C.secondary }}>{orderLabel(o)} · {fmtDate(o.createdAt)}</div>
+                    </div>
+                    <StatusPill status={o.status} />
+                    <ChevronRight size={18} color={C.tertiary} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {orders.length > 0 && (
+            <button onClick={() => { setError(""); setImportText(""); setView("backup"); }}
+                    className="w-full text-center text-sm font-medium py-4 mt-3" style={{ color: C.tint }}>
+              Backup & Restore
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- FORM ----------
+  if (view === "form") {
+    return (
+      <div className="ios min-h-screen pb-12" style={{ background: C.bg }}>
+        <style>{fontStyles}</style>
+        <NavBar title={editingId && current ? "Edit " + orderLabel(current) : (isMaint ? "New Maintenance" : "New Repair")}
+                back={() => setView(editingId ? "detail" : "list")} />
+        <div className="max-w-2xl mx-auto px-4">
+
+          <SectionHeader>Customer</SectionHeader>
+          <div className="space-y-3">
+            <div><FieldLabel>Company *</FieldLabel><TextInput value={form.customer} onChange={set("customer")} /></div>
+            <div><FieldLabel>Address</FieldLabel><TextInput value={form.address} onChange={set("address")} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><FieldLabel>Phone contact</FieldLabel><TextInput value={form.phone} onChange={set("phone")} inputMode="tel" /></div>
+              <div><FieldLabel>P.O. #</FieldLabel><TextInput value={form.po} onChange={set("po")} /></div>
+            </div>
+            {!isMaint && (
+              <div><FieldLabel>Special instructions</FieldLabel><TextInput value={form.specialInstructions} onChange={set("specialInstructions")} /></div>
+            )}
+          </div>
+
+          <SectionHeader>Forklift</SectionHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div><FieldLabel>Make</FieldLabel><TextInput value={form.make} onChange={set("make")} placeholder="Toyota" /></div>
+            <div><FieldLabel>Model</FieldLabel><TextInput value={form.model} onChange={set("model")} placeholder="8FGU25" /></div>
+            <div><FieldLabel>Serial #</FieldLabel><TextInput value={form.serial} onChange={set("serial")} /></div>
+            <div><FieldLabel>Unit #</FieldLabel><TextInput value={form.unit} onChange={set("unit")} /></div>
+            <div><FieldLabel>Hr. meter</FieldLabel><TextInput value={form.hourMeter} onChange={set("hourMeter")} inputMode="numeric" placeholder="Hrs" /></div>
+            <div><FieldLabel>Tech.</FieldLabel><TextInput value={form.tech} onChange={set("tech")} placeholder="Your name" /></div>
+          </div>
+
+          {isMaint && (
+            <>
+              <SectionHeader>Options</SectionHeader>
+              <div className="overflow-hidden" style={{ background: C.card, borderRadius: "12px" }}>
+                <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: `0.5px solid ${C.sep}` }}>
+                  <span className="text-base" style={{ color: C.label }}>Written estimate request</span>
+                  <IOSSwitch value={!!form.estimateRequest} onChange={(v) => setForm({ ...form, estimateRequest: v })} />
+                </div>
+                <div className="flex items-center justify-between px-4 py-2">
+                  <span className="text-base" style={{ color: C.label }}>Repairs schedule</span>
+                  <IOSSwitch value={!!form.repairsSchedule} onChange={(v) => setForm({ ...form, repairsSchedule: v })} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {!isMaint && (
+            <>
+              <SectionHeader>Repair Description</SectionHeader>
+              <TextArea value={form.repairDescription} onChange={set("repairDescription")} rows={6}
+                        placeholder="Describe the trouble found and the repair performed…" />
+            </>
+          )}
+
+          {isMaint && (
+            <>
+              <SectionHeader>Inspection Checklist</SectionHeader>
+              <div className="text-xs px-1 pb-2" style={{ color: C.secondary }}>
+                OK · NW (needs work) · CA (corrective action)
+              </div>
+              <div className="space-y-3">
+                {CHECKLIST.map((sec) => {
+                  const done = sec.items.filter((it) => form.checks[sec.key + "|" + it]).length;
+                  const open = openSection === sec.key;
+                  return (
+                    <div key={sec.key} className="overflow-hidden" style={{ background: C.card, borderRadius: "12px" }}>
+                      <button onClick={() => setOpenSection(open ? "" : sec.key)}
+                              className="w-full flex items-center justify-between px-4 py-3 active:opacity-60">
+                        <span className="font-semibold text-base" style={{ color: C.label }}>{sec.title}</span>
+                        <span className="flex items-center gap-1 text-sm" style={{ color: done === sec.items.length ? C.green : C.secondary }}>
+                          {done === sec.items.length && <CheckCircle2 size={16} color={C.green} />}
+                          {done}/{sec.items.length}
+                          <ChevronRight size={16} color={C.tertiary} style={{ transform: open ? "rotate(90deg)" : "none" }} />
+                        </span>
+                      </button>
+                      {open && (
+                        <div style={{ borderTop: `0.5px solid ${C.sep}` }}>
+                          <div className="px-4 py-2.5" style={{ borderBottom: `0.5px solid ${C.sep}` }}>
+                            <button onClick={() => markSectionOK(sec)} className="text-sm font-medium" style={{ color: C.tint }}>
+                              Mark remaining items OK
+                            </button>
+                          </div>
+                          {sec.items.map((it, idx) => {
+                            const val = form.checks[sec.key + "|" + it];
+                            return (
+                              <div key={it} className="flex items-center justify-between gap-2 px-4 py-2"
+                                   style={{ borderBottom: idx === sec.items.length - 1 ? "none" : `0.5px solid ${C.sep}` }}>
+                                <span className="text-sm flex-1" style={{ color: C.label }}>{it}</span>
+                                <div className="flex p-0.5 shrink-0" style={{ background: "#E3E3E8", borderRadius: "8px" }}>
+                                  {RATINGS.map((r) => (
+                                    <button key={r} onClick={() => setCheckTo(sec.key, it, r)}
+                                            className="text-xs font-semibold px-2.5 py-1"
+                                            style={{
+                                              borderRadius: "6px",
+                                              background: val === r ? ratingColor[r] : "transparent",
+                                              color: val === r ? "#FFF" : C.secondary,
+                                            }}>
+                                      {r}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <SectionHeader>Recommended Repairs</SectionHeader>
+              <TextArea value={form.recommendedRepairs} onChange={set("recommendedRepairs")} rows={4}
+                        placeholder="Repairs to recommend to the customer…" />
+            </>
+          )}
+
+          <div className="flex items-end justify-between">
+            <SectionHeader>Parts</SectionHeader>
+            <button onClick={addPart} className="flex items-center gap-1 text-sm font-medium pb-2 pr-1 active:opacity-60" style={{ color: C.tint }}>
+              <Plus size={16} strokeWidth={2.5} /> Add part
+            </button>
+          </div>
+          {form.parts.length === 0 && (
+            <div className="text-sm px-1" style={{ color: C.secondary }}>No parts added.</div>
+          )}
+          <div className="space-y-2">
+            {form.parts.map((p, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <input value={p.qty} onChange={(e) => setPart(i, "qty", e.target.value)} placeholder="Qty" inputMode="numeric"
+                       className="w-14 text-base text-center py-2.5"
+                       style={{ background: C.card, borderRadius: "10px", border: `1px solid ${C.sep}`, color: C.label }} />
+                <input value={p.name} onChange={(e) => setPart(i, "name", e.target.value)} placeholder="Part / description"
+                       className="flex-1 text-base px-3.5 py-2.5"
+                       style={{ background: C.card, borderRadius: "10px", border: `1px solid ${C.sep}`, color: C.label }} />
+                <button onClick={() => removePart(i)} className="p-1 active:opacity-50">
+                  <Trash2 size={18} color={C.destructive} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {error && (
+            <div className="text-sm font-medium text-center mt-4" style={{ color: C.destructive }}>{error}</div>
+          )}
+
+          <div className="space-y-3 mt-8">
+            <BigButton onClick={() => save(true)}>Save & Get Signatures</BigButton>
+            <GrayButton onClick={() => save(false)}>Save as Draft</GrayButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- SIGN ----------
+  if (view === "sign" && current) {
+    return (
+      <div className="ios min-h-screen pb-12" style={{ background: C.bg }}>
+        <style>{fontStyles}</style>
+        <NavBar title={"Sign-Off · " + orderLabel(current)} back={() => setView("detail")} />
+        <div className="max-w-2xl mx-auto px-4">
+          <p className="text-sm px-1 pt-5" style={{ color: C.secondary }}>
+            By signing, the customer authorizes and confirms the work described on this order at all prevailing rates.
+          </p>
+
+          <SectionHeader>Service Technician (optional)</SectionHeader>
+          <SignaturePad onChange={setTechSig} height={120} />
+
+          <SectionHeader>Customer</SectionHeader>
+          <SignaturePad onChange={setCustSig} height={160} />
+          <div className="mt-3">
+            <FieldLabel>Printed name</FieldLabel>
+            <TextInput value={signerName} onChange={(e) => setSignerName(e.target.value)} placeholder="Customer's name" />
+          </div>
+
+          {error && (
+            <div className="text-sm font-medium text-center mt-4" style={{ color: C.destructive }}>{error}</div>
+          )}
+
+          <div className="mt-6">
+            <BigButton onClick={completeSigning} color={C.green}>Complete Work Order</BigButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- DETAIL ----------
+  if (view === "detail" && current) {
+    const maint = current.type === "maint";
+    const rows = [
+      ["Company", current.customer],
+      ["Address", current.address],
+      ["Phone", current.phone],
+      ["P.O. #", current.po],
+      !maint && ["Instructions", current.specialInstructions],
+      ["Forklift", [current.make, current.model].filter(Boolean).join(" ")],
+      ["Serial #", current.serial],
+      ["Unit #", current.unit],
+      ["Hr. meter", current.hourMeter],
+      ["Tech.", current.tech],
+      maint && ["Estimate request", current.estimateRequest ? "Yes" : ""],
+      maint && ["Repairs schedule", current.repairsSchedule ? "Yes" : ""],
+    ].filter((r) => r && r[1]);
+
+    return (
+      <div className="ios min-h-screen pb-12" style={{ background: C.bg }}>
+        <style>{fontStyles}</style>
+        <NavBar title={orderLabel(current)} back={() => setView("list")} />
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="flex items-center gap-3 pt-6 px-1">
+            <span className="flex items-center justify-center shrink-0"
+                  style={{ width: "44px", height: "44px", borderRadius: "11px", background: maint ? "#1C1C1E" : C.tint }}>
+              {maint ? <ClipboardList size={24} color="#FFF" /> : <Wrench size={24} color="#FFF" />}
+            </span>
+            <div className="flex-1">
+              <div className="text-xl font-bold tracking-tight" style={{ color: C.label }}>{current.customer}</div>
+              <div className="text-sm" style={{ color: C.secondary }}>
+                {maint ? "Maintenance" : "Repair"} · {fmtDate(current.createdAt)}
+              </div>
+            </div>
+            <StatusPill status={current.status} />
+          </div>
+
+          <SectionHeader>Details</SectionHeader>
+          <div className="overflow-hidden" style={{ background: C.card, borderRadius: "12px" }}>
+            {rows.map(([k, v], i) => (
+              <div key={k} className="flex justify-between gap-4 px-4 py-2.5"
+                   style={{ borderBottom: i === rows.length - 1 ? "none" : `0.5px solid ${C.sep}` }}>
+                <span className="text-base shrink-0" style={{ color: C.label }}>{k}</span>
+                <span className="text-base text-right" style={{ color: C.secondary }}>{v}</span>
+              </div>
+            ))}
+          </div>
+
+          {!maint && current.repairDescription && (
+            <>
+              <SectionHeader>Repair Description</SectionHeader>
+              <div style={{ background: C.card, borderRadius: "12px" }}>
+                <p className="px-4 py-3 text-base whitespace-pre-wrap" style={{ color: C.label }}>{current.repairDescription}</p>
+              </div>
+            </>
+          )}
+
+          {maint && CHECKLIST.map((sec) => {
+            const marked = sec.items
+              .map((it) => [it, current.checks?.[sec.key + "|" + it]])
+              .filter(([, v]) => v);
+            if (marked.length === 0) return null;
+            return (
+              <div key={sec.key}>
+                <SectionHeader>{sec.title}</SectionHeader>
+                <div style={{ background: C.card, borderRadius: "12px" }}>
+                  <div className="flex flex-wrap gap-1.5 p-3">
+                    {marked.map(([it, v]) => (
+                      <span key={it} className="text-xs font-medium px-2 py-1"
+                            style={{ borderRadius: "20px", background: ratingColor[v] + "1A", color: ratingColor[v] }}>
+                        {it} · {v}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {maint && current.recommendedRepairs && (
+            <>
+              <SectionHeader>Recommended Repairs</SectionHeader>
+              <div style={{ background: C.card, borderRadius: "12px" }}>
+                <p className="px-4 py-3 text-base whitespace-pre-wrap" style={{ color: C.label }}>{current.recommendedRepairs}</p>
+              </div>
+            </>
+          )}
+
+          {current.parts && current.parts.filter((p) => p.name).length > 0 && (
+            <>
+              <SectionHeader>Parts</SectionHeader>
+              <div className="overflow-hidden" style={{ background: C.card, borderRadius: "12px" }}>
+                {current.parts.filter((p) => p.name).map((p, i, arr) => (
+                  <div key={i} className="px-4 py-2.5 text-base"
+                       style={{ color: C.label, borderBottom: i === arr.length - 1 ? "none" : `0.5px solid ${C.sep}` }}>
+                    {p.qty || 1} × {p.name}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {current.status === "signed" && (
+            <>
+              <SectionHeader>Sign-Off</SectionHeader>
+              <div style={{ background: C.card, borderRadius: "12px" }}>
+                <div className="flex flex-wrap gap-6 p-4">
+                  {current.technicianSignature && (
+                    <div>
+                      <img src={current.technicianSignature} alt="Technician signature" className="max-h-14" style={{ borderRadius: "6px" }} />
+                      <div className="text-xs mt-1" style={{ color: C.secondary }}>Service technician</div>
+                    </div>
+                  )}
+                  {current.signature && (
+                    <div>
+                      <img src={current.signature} alt="Customer signature" className="max-h-14" style={{ borderRadius: "6px" }} />
+                      <div className="text-xs mt-1" style={{ color: C.secondary }}>
+                        {current.signerName ? current.signerName + " · " : ""}Customer · {fmtDate(current.signedAt)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="space-y-3 mt-6">
+            {current.status === "signed" ? (
+              <>
+                <BigButton onClick={savePDF} color={C.tint}>
+                  Save as PDF
+                </BigButton>
+                <div className="text-xs text-center px-2" style={{ color: C.secondary }}>
+                  Opens a printable copy — choose Share or "Save to Files" to keep the PDF, then upload it in QuickBooks.
+                </div>
+                {qb.state === "error" && qb.msg && (
+                  <div className="text-sm font-medium text-center px-2" style={{ color: C.destructive }}>
+                    {qb.msg}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <BigButton onClick={() => { setCustSig(null); setTechSig(null); setSignerName(""); setError(""); setView("sign"); }}>
+                  <span className="inline-flex items-center gap-1.5"><PenLine size={18} /> Get Signatures</span>
+                </BigButton>
+                <GrayButton onClick={editDraft}>Edit Work Order</GrayButton>
+              </>
+            )}
+            <button onClick={removeOrder}
+                    className="w-full text-center text-base font-semibold py-3.5 active:opacity-70"
+                    style={{ background: C.card, color: C.destructive, borderRadius: "14px" }}>
+              Delete Work Order
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(AtlasServiceOrders));
+</script>
+</body>
+</html>
