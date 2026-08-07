@@ -13,138 +13,128 @@
 <link rel="manifest" href="./manifest.webmanifest" />
 <title>Atlas Work Orders</title>
 <style>
-  html, body { margin:0; padding:0; background:#F2F2F7; }
-  * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
-  #root { min-height: 100vh; }
-  #boot {
-    position: fixed; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 14px; padding: 28px;
-    font: 15px -apple-system, Helvetica, Arial, sans-serif; color: #444; text-align: center;
-    background: #F2F2F7;
-  }
-  #boot .mark {
-    width: 62px; height: 62px; border-radius: 14px; background: #E3251E; color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font: 800 34px -apple-system, Helvetica, Arial, sans-serif;
-  }
-  #bootErr {
-    display: none; max-width: 560px; width: 100%; text-align: left;
-    background: #fff; border: 1px solid #E3251E; border-radius: 12px;
-    padding: 14px; font: 12px ui-monospace, Menlo, monospace; color: #B3120C;
-    white-space: pre-wrap; word-break: break-word;
-  }
-  #retryBtn {
-    display: none; background: #E3251E; color: #fff; border: 0; border-radius: 12px;
-    padding: 12px 22px; font: 600 15px -apple-system, sans-serif;
-  }
-  #offlineToast {
-    position: fixed; left: 50%; transform: translateX(-50%);
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
-    background: rgba(28,28,30,.94); color: #fff; font: 600 13px -apple-system, sans-serif;
-    padding: 10px 16px; border-radius: 999px; z-index: 9999; opacity: 0;
-    transition: opacity .3s; pointer-events: none; max-width: 88%; text-align: center;
-  }
-  #offlineToast.show { opacity: 1; }
+html,body{margin:0;padding:0;background:#F2F2F7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+*{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+button{font-family:inherit;border:0;background:none;cursor:pointer}
+input,textarea,select{font-family:inherit}
+#root{min-height:100vh}
+
+/* ---- Utility CSS (replaces Tailwind for the classes this app uses) ---- */
+.block{display:block}.flex{display:flex}.inline-flex{display:inline-flex}.grid{display:grid}
+.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.flex-1{flex:1 1 0%}
+.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.items-center{align-items:center}.items-start{align-items:flex-start}.items-end{align-items:flex-end}
+.justify-center{justify-content:center}.justify-between{justify-content:space-between}
+.shrink-0{flex-shrink:0}.min-w-0{min-width:0}
+.relative{position:relative}.absolute{position:absolute}.sticky{position:sticky}
+.top-0{top:0}.left-5{left:1.25rem}.right-5{right:1.25rem}.left-1\/2{left:50%}
+.z-10{z-index:10}
+.-translate-x-1\/2{transform:translateX(-50%)}
+.overflow-hidden{overflow:hidden}
+.pointer-events-none{pointer-events:none}
+.w-full{width:100%}.w-14{width:3.5rem}.h-11{height:2.75rem}
+.max-h-14{max-height:3.5rem}.max-w-2xl{max-width:42rem}.max-w-\[55\%\]{max-width:55%}
+.min-h-screen{min-height:100vh}
+.mx-auto{margin-left:auto;margin-right:auto}
+.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}.mt-4{margin-top:1rem}
+.mt-5{margin-top:1.25rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}
+.mb-1{margin-bottom:.25rem}
+.-mt-1\.5{margin-top:-.375rem}.-ml-0\.5{margin-left:-.125rem}
+.p-0\.5{padding:.125rem}.p-1{padding:.25rem}.p-3{padding:.75rem}.p-4{padding:1rem}.p-8{padding:2rem}
+.px-1{padding-left:.25rem;padding-right:.25rem}
+.px-2{padding-left:.5rem;padding-right:.5rem}
+.px-2\.5{padding-left:.625rem;padding-right:.625rem}
+.px-3{padding-left:.75rem;padding-right:.75rem}
+.px-3\.5{padding-left:.875rem;padding-right:.875rem}
+.px-4{padding-left:1rem;padding-right:1rem}
+.py-0\.5{padding-top:.125rem;padding-bottom:.125rem}
+.py-1{padding-top:.25rem;padding-bottom:.25rem}
+.py-1\.5{padding-top:.375rem;padding-bottom:.375rem}
+.py-2{padding-top:.5rem;padding-bottom:.5rem}
+.py-2\.5{padding-top:.625rem;padding-bottom:.625rem}
+.py-3{padding-top:.75rem;padding-bottom:.75rem}
+.py-3\.5{padding-top:.875rem;padding-bottom:.875rem}
+.py-4{padding-top:1rem;padding-bottom:1rem}
+.pt-5{padding-top:1.25rem}.pt-6{padding-top:1.5rem}.pt-8{padding-top:2rem}
+.pb-2{padding-bottom:.5rem}.pb-10{padding-bottom:2.5rem}.pb-12{padding-bottom:3rem}
+.pr-1{padding-right:.25rem}
+.gap-1{gap:.25rem}.gap-1\.5{gap:.375rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}
+.space-y-2>*+*{margin-top:.5rem}.space-y-3>*+*{margin-top:.75rem}
+.text-xs{font-size:.75rem;line-height:1rem}
+.text-sm{font-size:.875rem;line-height:1.25rem}
+.text-base{font-size:1rem;line-height:1.5rem}
+.text-xl{font-size:1.25rem;line-height:1.75rem}
+.text-3xl{font-size:1.875rem;line-height:2.25rem}
+.font-medium{font-weight:500}.font-semibold{font-weight:600}.font-bold{font-weight:700}
+.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}
+.uppercase{text-transform:uppercase}
+.leading-none{line-height:1}.leading-tight{line-height:1.25}
+.tracking-tight{letter-spacing:-.015em}
+.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.whitespace-pre-wrap{white-space:pre-wrap}
+.transition-all{transition:all .2s}.transition-colors{transition:background-color .2s,border-color .2s,color .2s}
+.active\:opacity-50:active{opacity:.5}.active\:opacity-60:active{opacity:.6}.active\:opacity-70:active{opacity:.7}
+
+#boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:26px;text-align:center;background:#F2F2F7;color:#444;font-size:15px}
+#boot .mark{width:62px;height:62px;border-radius:14px;background:#E3251E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800}
+#bootErr{display:none;max-width:600px;width:100%;text-align:left;background:#fff;border:1px solid #E3251E;border-radius:12px;padding:14px;font:12px ui-monospace,Menlo,monospace;color:#B3120C;white-space:pre-wrap;word-break:break-word;max-height:50vh;overflow:auto}
+#retryBtn{display:none;background:#E3251E;color:#fff;border-radius:12px;padding:12px 22px;font-size:15px;font-weight:600}
+#offlineToast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);background:rgba(28,28,30,.94);color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:999px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:88%;text-align:center}
+#offlineToast.show{opacity:1}
 </style>
 </head>
 <body>
 <div id="root"></div>
-
 <div id="boot">
   <div class="mark">A</div>
   <div id="bootMsg">Loading Atlas Work Orders&hellip;</div>
   <div id="bootErr"></div>
   <button id="retryBtn" onclick="location.reload()">Try Again</button>
 </div>
-
 <div id="offlineToast"></div>
 
 <script>
-// Show any startup problem on screen instead of a blank page.
-window.__bootFail = function (what, detail) {
-  var b = document.getElementById("bootMsg");
-  var e = document.getElementById("bootErr");
-  var r = document.getElementById("retryBtn");
+window.__fail = function (what, detail) {
+  var b = document.getElementById("bootMsg"), e = document.getElementById("bootErr"), r = document.getElementById("retryBtn");
   if (b) b.textContent = "Couldn't start the app";
   if (e) { e.style.display = "block"; e.textContent = what + (detail ? "\n\n" + detail : ""); }
   if (r) r.style.display = "inline-block";
 };
-window.addEventListener("error", function (ev) {
-  if (document.getElementById("boot")) {
-    window.__bootFail("Script error", (ev.message || "") + "\n" + (ev.filename || "") + ":" + (ev.lineno || ""));
-  }
-});
+window.__libFail = [];
 </script>
 
-<!-- Libraries: try unpkg, fall back to jsDelivr if it is blocked or unreachable -->
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script>
-if (!window.React) document.write('<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"><\/script>');
-</script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script>
-if (!window.ReactDOM) document.write('<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"><\/script>');
-</script>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script>
-if (!window.Babel) document.write('<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"><\/script>');
-</script>
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" onerror="window.__libFail.push('React')"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" onerror="window.__libFail.push('ReactDOM')"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.7/babel.min.js" onerror="window.__libFail.push('Babel')"></script>
 
-<script>
-// Verify everything actually arrived before we try to render.
-(function () {
-  var missing = [];
-  if (!window.React) missing.push("React");
-  if (!window.ReactDOM) missing.push("ReactDOM");
-  if (!window.Babel) missing.push("Babel (JSX compiler)");
-  if (!window.tailwind) missing.push("Tailwind CSS");
-  if (missing.length) {
-    window.__bootFail(
-      "These couldn't load: " + missing.join(", "),
-      "Usually this means no internet on first load, or a content blocker. " +
-      "If you use Brave, tap the lion icon and turn Shields OFF for this site, then reload."
-    );
-  }
-})();
-</script>
+<script type="text/plain" id="appsrc">
+var useState = React.useState, useEffect = React.useEffect, useRef = React.useRef;
 
-<script type="text/babel" data-presets="react">
-const { useState, useEffect, useRef } = React;
+var _icon = function (paths) { return function (p) {
+  p = p || {};
+  var size = p.size || 24, color = p.color || "currentColor", sw = p.strokeWidth || 2;
+  var props = { xmlns: "http://www.w3.org/2000/svg", width: size, height: size,
+    viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw,
+    strokeLinecap: "round", strokeLinejoin: "round", style: p.style, className: p.className };
+  return React.createElement.apply(null, [ "svg", props ].concat(
+    paths.map(function (d, i) { return React.createElement("path", { key: i, d: d }); })));
+}; };
+var Wrench = _icon(["M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"]);
+var ClipboardList = _icon(["M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2","M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z","M12 11h4","M12 16h4","M8 11h.01","M8 16h.01"]);
+var ChevronRight = _icon(["m9 18 6-6-6-6"]);
+var ChevronLeft = _icon(["m15 18-6-6 6-6"]);
+var Plus = _icon(["M5 12h14","M12 5v14"]);
+var Trash2 = _icon(["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2","M10 11v6","M14 11v6"]);
+var PenLine = _icon(["M12 20h9","M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"]);
+var CheckCircle2 = _icon(["M22 11.08V12a10 10 0 1 1-5.93-9.14","m9 11 3 3L22 4"]);
+var AlertTriangle = _icon(["m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z","M12 9v4","M12 17h.01"]);
+var Copy = _icon(["M20 9H10a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1z","M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"]);
+var Check = _icon(["M20 6 9 17l-5-5"]);
 
-
-const _icon = (paths) => (p) => {
-  const { size = 24, color = "currentColor", strokeWidth = 2, style, ...rest } = p || {};
-  return React.createElement("svg", {
-    xmlns: "http://www.w3.org/2000/svg", width: size, height: size,
-    viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth,
-    strokeLinecap: "round", strokeLinejoin: "round", style, ...rest
-  }, paths.map((d, i) => React.createElement("path", { key: i, d })));
-};
-const Wrench = _icon(["M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"]);
-const ClipboardList = _icon(["M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2","M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z","M12 11h4","M12 16h4","M8 11h.01","M8 16h.01"]);
-const ChevronRight = _icon(["m9 18 6-6-6-6"]);
-const ChevronLeft = _icon(["m15 18-6-6 6-6"]);
-const Plus = _icon(["M5 12h14","M12 5v14"]);
-const Trash2 = _icon(["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2","M10 11v6","M14 11v6"]);
-const PenLine = _icon(["M12 20h9","M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"]);
-const CheckCircle2 = _icon(["M22 11.08V12a10 10 0 1 1-5.93-9.14","m9 11 3 3L22 4"]);
-const AlertTriangle = _icon(["m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z","M12 9v4","M12 17h.01"]);
-const Copy = _icon(["M20 9H10a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1z","M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"]);
-const Check = _icon(["M20 6 9 17l-5-5"]);
-
-
-// ---------- storage: localStorage keeps work orders on this device ----------
 if (!window.storage) {
   window.storage = {
-    get: async (key) => {
-      try { const v = localStorage.getItem(key); return v == null ? null : JSON.parse(v); }
-      catch (e) { return null; }
-    },
-    set: async (key, value) => {
-      try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-      catch (e) { throw new Error("localStorage set failed: " + e.message); }
-    },
+    get: function (key) { try { var v = localStorage.getItem(key); return Promise.resolve(v == null ? null : JSON.parse(v)); } catch (e) { return Promise.resolve(null); } },
+    set: function (key, value) { try { localStorage.setItem(key, JSON.stringify(value)); return Promise.resolve(true); } catch (e) { return Promise.reject(new Error("Storage failed: " + e.message)); } }
   };
 }
 
@@ -1236,33 +1226,53 @@ function AtlasServiceOrders() {
   return null;
 }
 
-
-try {
-  const root = ReactDOM.createRoot(document.getElementById("root"));
-  root.render(React.createElement(AtlasServiceOrders));
-  const boot = document.getElementById("boot");
-  if (boot) boot.remove();
-} catch (err) {
-  window.__bootFail("The app failed to start", (err && err.message) || String(err));
-}
 </script>
 
 <script>
-// ---------- offline caching ----------
 (function () {
-  function toast(msg, ms) {
+  var missing = [];
+  if (!window.React) missing.push("React");
+  if (!window.ReactDOM) missing.push("ReactDOM");
+  if (!window.Babel) missing.push("Babel");
+  if (missing.length) {
+    window.__fail("Couldn't download: " + missing.join(", "),
+      "This happens with no internet on the very first open, or if a content blocker is on.\nIn Brave: tap the lion icon and turn Shields OFF for this site, then reload.");
+    return;
+  }
+  var code = document.getElementById("appsrc").textContent;
+  var out;
+  try {
+    out = Babel.transform(code, { presets: ["react"], filename: "app.jsx" }).code;
+  } catch (err) {
+    window.__fail("Compile error", (err && err.message) || String(err));
+    return;
+  }
+  try {
+    (0, eval)(out);
+    var root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(React.createElement(AtlasServiceOrders));
+    var boot = document.getElementById("boot");
+    if (boot) boot.parentNode.removeChild(boot);
+  } catch (err) {
+    window.__fail("Startup error", ((err && err.message) || String(err)) + "\n\n" + ((err && err.stack) || ""));
+  }
+})();
+</script>
+
+<script>
+(function () {
+  function toast(m, ms) {
     var t = document.getElementById("offlineToast");
     if (!t) return;
-    t.textContent = msg; t.classList.add("show");
+    t.textContent = m; t.classList.add("show");
     setTimeout(function () { t.classList.remove("show"); }, ms || 3000);
   }
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./sw.js").catch(function (e) { console.log("SW failed", e); });
+      navigator.serviceWorker.register("./sw.js").catch(function () {});
       navigator.serviceWorker.addEventListener("message", function (ev) {
         if (ev.data && ev.data.type === "precache") {
-          toast(ev.data.cached >= ev.data.total
-            ? "Saved for offline use ✓"
+          toast(ev.data.cached >= ev.data.total ? "Saved for offline use ✓"
             : "Partly saved offline (" + ev.data.cached + "/" + ev.data.total + ")", 3500);
         }
       });
