@@ -151,6 +151,7 @@ if (!window.storage) {
 
 
 
+
 // ---------- iOS design tokens (Atlas red as the app tint) ----------
 const C = {
   bg: "#F2F2F7",
@@ -378,9 +379,9 @@ function maintenanceHTML(order) {
   const dt = new Date(order.createdAt || Date.now()).toLocaleDateString();
 
   const grid = `<table class="grid3"><tr>
-    <td>${checkTable(CHECKLIST[0], checks, "VISUAL INSPECTION")}</td>
-    <td>${checkTable(CHECKLIST[1], checks, "SERVICE CHECK POINT")}</td>
-    <td>${checkTable(CHECKLIST[2], checks, "MOTORS")}${partsBlockMaint(order)}</td>
+    <td style="width:28%">${checkTable(CHECKLIST[0], checks, "VISUAL INSPECTION")}</td>
+    <td style="width:36%">${checkTable(CHECKLIST[1], checks, "SERVICE CHECK POINT")}</td>
+    <td style="width:36%">${checkTable(CHECKLIST[2], checks, "MOTORS")}${partsBlockMaint(order)}</td>
   </tr></table>`;
 
   return `
@@ -411,7 +412,7 @@ function maintenanceHTML(order) {
     </tr>
   </table>
   ${grid}
-  ${ruledBlock("RECOMMENDED REPAIRS:", order.recommendedRepairs, 8)}
+  ${ruledBlock("RECOMMENDED REPAIRS:", order.recommendedRepairs, 5)}
   <div class="terms">${ARBITRATION}</div>
   ${signBlock(order)}`;
 }
@@ -461,7 +462,7 @@ function repairHTML(order) {
     </tr>
   </table>
   <div class="banner">REPAIR DESCRIPTION</div>
-  ${ruledBlock("", order.repairDescription, 10)}
+  ${ruledBlock("", order.repairDescription, 8)}
   <table class="chk partsr">
     <tr>
       <th class="q">QTY</th><th>PARTS</th><th class="d">DESCRIPTION</th>
@@ -484,6 +485,9 @@ function buildWorkOrderHTML(order) {
 <title>${title}</title>
 <style>
   @page { size: letter portrait; margin: 0.25in; }
+  /* safety net: if the browser lays this out taller than expected,
+     shrink the whole sheet slightly rather than spilling to page 2 */
+  @media print { body { zoom: 0.94; } }
   * { box-sizing: border-box; }
   body { font-family: Helvetica, Arial, sans-serif; color:#000; margin:0; padding:2px; font-size:11px; }
   .letterhead { position:relative; text-align:center; margin-bottom:2px; min-height:96px; }
@@ -508,17 +512,17 @@ function buildWorkOrderHTML(order) {
   table.grid3 { width:100%; border-collapse:collapse; table-layout:fixed; margin-top:-1px; }
   table.grid3 > tbody > tr > td { vertical-align:top; padding:0; }
   table.chk { width:100%; border-collapse:collapse; }
-  table.chk th, table.chk td { border:1px solid #000; padding:3.0px 2.5px; font-size:11.4px; line-height:1.25; }
+  table.chk th, table.chk td { border:1px solid #000; padding:2.2px 2.5px; font-size:9.8px; line-height:1.25; }
   table.chk th { font-weight:700; text-align:center; background:#fff; }
-  table.chk th.hd { text-align:left; font-size:10.8px; white-space:nowrap; }
+  table.chk th.hd { text-align:left; font-size:9.8px; white-space:nowrap; }
   table.chk td.it { white-space:nowrap; }
   table.chk td.it { text-transform:uppercase; }
-  table.chk .mkh { width:25px; }
-  table.chk td.mk { width:25px; text-align:center; font-weight:700; font-size:11.5px; }
+  table.chk .mkh { width:20px; }
+  table.chk td.mk { width:20px; text-align:center; font-weight:700; font-size:10.5px; }
   table.parts-m { margin-top:-1px; }
-  table.parts-m th.q, table.parts-m td.q { width:36px; text-align:center; }
-  table.parts-m td.d { text-transform:none; font-size:10.2px; }
-  table.parts-m td.q { font-size:10.2px; }
+  table.parts-m th.q, table.parts-m td.q { width:30px; text-align:center; }
+  table.parts-m td.d { text-transform:none; font-size:9.8px; }
+  table.parts-m td.q { font-size:9.8px; }
   table.partsr { margin-top:-1px; }
   table.partsr th.q, table.partsr td.q { width:42px; text-align:center; }
   table.partsr td { font-size:17px; }
@@ -526,18 +530,18 @@ function buildWorkOrderHTML(order) {
   table.partsr td.mlbl { font-weight:700; font-size:11px; white-space:nowrap; width:82px; }
   table.partsr th.mh { width:82px; }
   table.partsr th.th, table.partsr td.tot { width:72px; }
-  table.partsr td { height:34px; }
+  table.partsr td { height:27px; }
   .banner { border:1px solid #000; border-top:0; text-align:center; font-weight:700; font-size:18px; padding:3px; }
   .ruled { border:1px solid #000; border-top:0; padding:0; }
   .rl-label { font-weight:700; font-size:13px; padding:3px 4px 0; }
   .rl-text { padding:2px 5px 4px; font-size:13px; min-height:18px; white-space:pre-wrap; }
   .rl-wrap { position:relative; }
-  .rl { border-top:1px solid #000; height:38px; }
+  .rl { border-top:1px solid #000; height:32px; }
   .rl-over { position:absolute; left:0; top:0; right:0; padding:0 6px;
-             font-size:20px; line-height:38px; white-space:pre-wrap;
+             font-size:18px; line-height:32px; white-space:pre-wrap;
              word-wrap:break-word; overflow-wrap:break-word; }
-  .terms { font-size:10.2px; line-height:1.35; border:1px solid #000; border-top:0; padding:3px 4px; text-align:justify; }
-  table.sign { width:100%; border-collapse:collapse; margin-top:30px; table-layout:fixed; }
+  .terms { font-size:9.6px; line-height:1.3; border:1px solid #000; border-top:0; padding:3px 4px; text-align:justify; }
+  table.sign { width:100%; border-collapse:collapse; margin-top:12px; table-layout:fixed; }
   table.sign td.si { height:34px; vertical-align:bottom; border-bottom:1px solid #000; padding:0 4px; }
   table.sign td.sd { width:17%; }
   table.sign td.si img { max-height:32px; max-width:100%; display:block; }

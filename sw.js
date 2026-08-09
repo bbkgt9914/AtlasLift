@@ -1,5 +1,5 @@
 /* Atlas Work Orders - offline service worker */
-const CACHE = "atlas-wo-v15";
+const CACHE = "atlas-wo-v16";
 
 const ASSETS = [
   "./",
